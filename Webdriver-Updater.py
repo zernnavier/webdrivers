@@ -112,6 +112,9 @@ class DriverDownloader:
         with request.urlopen(url) as response:
             with ZipFile(BytesIO(response.read())) as zipfile:
                 zipfile.extractall(path=destination)
+        driver_notes = f'{destination}{os.sep}Driver_Notes{os.sep}'
+        if os.path.exists(driver_notes):
+            shutil.rmtree(driver_notes)
 
     def _chrome_driver_download(
         self, version: str, platform: str, destination: "os.PathLike"
@@ -130,9 +133,6 @@ class DriverDownloader:
     ):
         url = self._get_gecko_download_url(version=version, platform=platform)
         self._download_and_extract_zip(url, destination)
-        driver_notes = f'{destination}{os.sep}Driver_Notes{os.sep}'
-        if os.path.exists(driver_notes):
-            shutil.rmtree(driver_notes)
 
     def chrome_update(self, version: str, destination: "os.PathLike"):
         [major, minor, state, _] = version.split(".")
