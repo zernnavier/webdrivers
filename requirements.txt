@@ -1,2 +1,4 @@
+schema
 pyyaml
+zipfile
 selenium

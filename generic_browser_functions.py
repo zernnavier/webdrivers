@@ -1,42 +1,79 @@
-from typing import Dict, List
+import os
+import re
+from typing import List, Optional, NamedTuple
 from subprocess import run
+
+import yaml
+
+from schema import Schema, Regex
+
+
+class Browser(NamedTuple):
+    corporation: str
+    application: str
+
+
+BrowserList = List[str]
 
 
 def main():
-    chromeCMDs = browser_commands('google', 'chrome')
-    edgeCMDs = browser_commands('microsoft', 'edge')
-    firefoxCMDs = browser_commands('mozilla', 'firefox')
-    # firefoxCMDs = browser_commands('mozilla', 'mozilla firefox')
-    chrome_version, edge_version, firefox_version = get_version(chromeCMDs), get_version(edgeCMDs), get_version(firefoxCMDs)
-    print(f'{chrome_version = }', f'{edge_version = }', f'{firefox_version = }', sep="\n")
+    browser_corps = {"chrome": "google", "edge": "microsoft", "firefox": "mozilla"}
+    browsers = Browsers.get_browsers("config.yaml")
+    for browser in browsers:
+        browser_obj = Browser(browser_corps[browser], browser)
+        version = Browsers.get_version(browser_obj.corporation, browser_obj.application)
+        print(f"{version = }")
 
 
-def browser_commands(corporation: str, software: str) -> Dict[int, List[str]]:
-    corporation, software = corporation.strip().title(), software.strip().title()
-    if corporation != "Mozilla":
-        windows_cmds = {
-            1: ['REG', 'QUERY', f'"HKEY_CURRENT_USER\\Software\\{corporation}\\{software}\\BLBeacon"'],
-            2: ['FINDSTR', '"version"'],
+class Browsers:
+    SCHEMA = Schema(
+        {
+            "BROWSERS": [
+                Regex(
+                    r"(CHROME|FIREFOX|EDGE)",
+                    flags=re.I,
+                )
+            ]
         }
-        return windows_cmds
-    actual_software_name = {
-        "Firefox": "Mozilla Firefox",
-        "Mozilla Firefox": "Mozilla Firefox"
-    }
-    windows_cmds = {
-        1: ['REG', 'QUERY', f'"HKEY_CURRENT_USER\\Software\\{corporation}\\{actual_software_name[software]}"'],
-        2: ['FINDSTR', '"CurrentVersion"'],
-    }
-    return windows_cmds
+    )
 
+    @classmethod
+    def get_browsers(cls, filename: "os.PathLike") -> "BrowserList":
+        with open(filename, "r") as yamlfile:
+            configuration = yaml.safe_load(yamlfile)
+        cls.SCHEMA.validate(configuration)
+        browsers = []
+        for browser in configuration["BROWSERS"]:
+            if browser not in browsers:
+                browsers.append(browser.lower())
+        return browsers
 
-def get_version(cmds: Dict[int, List[str]]) -> str | None:
-    import re
-    REGEX_VERSION_CAPTURE = r'\d\d*\.\d\d*\.\d\d*\.*\d*'
-    str_form_cmds = [" ".join(j) for i, j in cmds.items()]
-    str_form_cmd = " | ".join(str_form_cmds)
-    stdout = run(str_form_cmd, capture_output=True, shell=True, text=True).stdout.strip()
-    return re.search(REGEX_VERSION_CAPTURE, stdout).group(0)
+    @staticmethod
+    def get_version(corporation: str, application: str) -> Optional[str]:
+        corporation, application = (
+            corporation.strip().title(),
+            application.strip().title(),
+        )
+        application_version_key, version = (
+            (f"{application}\\BLBeacon", "version")
+            if corporation != "Mozilla"
+            else (" ".join((corporation, application)), "CurrentVersion")
+        )
+        windows_cmds = {
+            1: [
+                "REG",
+                "QUERY",
+                f'"HKEY_CURRENT_USER\\SOFTWARE\\{corporation}\\{application_version_key}"',
+            ],
+            2: ["FINDSTR", f'"{version}"'],
+        }
+        regex_version_capture = r"\d\d*\.\d\d*\.\d\d*\.*\d*"
+        str_form_cmds = [" ".join(j) for i, j in windows_cmds.items()]
+        str_form_cmd = " | ".join(str_form_cmds)
+        stdout = run(
+            str_form_cmd, check=True, capture_output=True, shell=True, text=True
+        ).stdout.strip()
+        return re.search(regex_version_capture, stdout).group(0)
 
 
 if __name__ == "__main__":
