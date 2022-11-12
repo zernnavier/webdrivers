@@ -1,7 +1,10 @@
 import re
 import os
+import shutil
+from io import BytesIO
 from subprocess import run
 from urllib import request
+from zipfile import ZipFile
 
 from generic_browser_functions import Browser, Browsers
 
@@ -35,13 +38,41 @@ class DriverDownloader:
     CHROME_VERSION_URL = (
         r"https://chromedriver.storage.googleapis.com/LATEST_RELEASE_major.minor.state"
     )
+    CHROME_DOWNLOAD_URL = (
+        r"https://chromedriver.storage.googleapis.com/version/chromedriver_platform.zip"
+    )
     GECKO_VERSION_URL = r"https://github.com/mozilla/geckodriver/releases/latest"
+    GECKO_DOWNLOAD_URL = (
+        "https://github.com/mozilla/geckodriver/releases/download/"
+        "vversion/geckodriver-vversion-platform.zip"
+    )
+    EDGE_DOWNLOAD_URL = (
+        r"https://msedgedriver.azureedge.net/version/edgedriver_platform.zip"
+    )
 
     @classmethod
-    def get_chrome_url(cls, **kwargs) -> str:
+    def _get_chrome_version_url(cls, **kwargs) -> str:
         for key, value in kwargs.items():
             cls.CHROME_VERSION_URL = cls.CHROME_VERSION_URL.replace(key, value)
         return cls.CHROME_VERSION_URL
+
+    @classmethod
+    def _get_chrome_download_url(cls, **kwargs) -> str:
+        for key, value in kwargs.items():
+            cls.CHROME_DOWNLOAD_URL = cls.CHROME_DOWNLOAD_URL.replace(key, value)
+        return cls.CHROME_DOWNLOAD_URL
+
+    @classmethod
+    def _get_gecko_download_url(cls, **kwargs) -> str:
+        for key, value in kwargs.items():
+            cls.GECKO_DOWNLOAD_URL = cls.GECKO_DOWNLOAD_URL.replace(key, value)
+        return cls.GECKO_DOWNLOAD_URL
+
+    @classmethod
+    def _get_edge_download_url(cls, **kwargs) -> str:
+        for key, value in kwargs.items():
+            cls.EDGE_DOWNLOAD_URL = cls.EDGE_DOWNLOAD_URL.replace(key, value)
+        return cls.EDGE_DOWNLOAD_URL
 
     @classmethod
     def _get_os_architecture_chipset(
@@ -67,7 +98,7 @@ class DriverDownloader:
             2: [
                 "FINDSTR",
                 "/R",
-                r'"[0-9][0-9]*[^0-9][0-9][0-9]*[^0-9][0-9][0-9]*[^0-9]*diff[0-9]*"',
+                r'"[0-9][0-9]*[^0-9][0-9][0-9]*[^0-9][0-9][0-9]*[^0-9]*[0-9]*"',
             ],
         }
         str_form_cmd = " | ".join([" ".join(cmd) for cmd in window_cmd.values()])
@@ -76,22 +107,46 @@ class DriverDownloader:
         ).stdout.strip()
         return re.search(cls.REGEX_VERSION_CAPTURE, stdout).group(0)
 
-    def chrome_update(self, version: str, destination: str):
-        os_architecture_chipset = self._get_os_architecture_chipset(
-            self.OS[1], self.ARCHITECTURE[1], self.CHIPSET[0]
-        )
-        driver_path = f"{THIS_FILE_DIRECTORY}\\chromedriver.exe"
-        if not os.path.exists(driver_path):
-            print("Downloading chromedriver.exe")
-            os.system(
-                "Auto-ChromeDriver-Downloader.bat "
-                f"{version} {os_architecture_chipset} {destination}"
-            )
-            return
+    @staticmethod
+    def _download_and_extract_zip(url: str, destination: "os.PathLike"):
+        with request.urlopen(url) as response:
+            with ZipFile(BytesIO(response.read())) as zipfile:
+                zipfile.extractall(path=destination)
+
+    def _chrome_driver_download(
+        self, version: str, platform: str, destination: "os.PathLike"
+    ):
+        url = self._get_chrome_download_url(version=version, platform=platform)
+        self._download_and_extract_zip(url, destination)
+
+    def _edge_driver_download(
+        self, version: str, platform: str, destination: "os.PathLike"
+    ):
+        url = self._get_edge_download_url(version=version, platform=platform)
+        self._download_and_extract_zip(url, destination)
+
+    def _gecko_driver_download(
+        self, version: str, platform: str, destination: "os.PathLike"
+    ):
+        url = self._get_gecko_download_url(version=version, platform=platform)
+        self._download_and_extract_zip(url, destination)
+        driver_notes = f'{destination}{os.sep}Driver_Notes{os.sep}'
+        if os.path.exists(driver_notes):
+            shutil.rmtree(driver_notes)
+
+    def chrome_update(self, version: str, destination: "os.PathLike"):
         [major, minor, state, _] = version.split(".")
-        url = self.get_chrome_url(major=major, minor=minor, state=state)
+        url = self._get_chrome_version_url(major=major, minor=minor, state=state)
         with request.urlopen(url) as response:
             expected_driver_version = response.read().decode(self.CODING_FORMAT).strip()
+        platform = self._get_os_architecture_chipset(
+            self.OS[1], self.ARCHITECTURE[1], self.CHIPSET[0]
+        )
+        driver_path = f"{destination}{os.sep}chromedriver.exe"
+        if not os.path.exists(driver_path):
+            print("Downloading chromedriver.exe")
+            self._chrome_driver_download(expected_driver_version, platform, destination)
+            return
         current_driver_version = self._driver_version(driver_path)
         if current_driver_version == expected_driver_version:
             print(
@@ -99,21 +154,17 @@ class DriverDownloader:
             )
             return
         print(f"{current_driver_version = }, {expected_driver_version = }")
-        print("Downloading matching chromedriver.exe")
-        os.system(
-            f"Auto-ChromeDriver-Downloader.bat {version} {os_architecture_chipset} {destination}"
-        )
+        print("Updating matching chromedriver.exe")
+        self._chrome_driver_download(expected_driver_version, platform, destination)
 
-    def edge_update(self, version: str, destination: str):
-        os_architecture_chipset = self._get_os_architecture_chipset(
+    def edge_update(self, version: str, destination: "os.PathLike"):
+        platform = self._get_os_architecture_chipset(
             self.OS[1], self.ARCHITECTURE[2], self.CHIPSET[0]
         )
-        driver_path = f"{THIS_FILE_DIRECTORY}\\msedgedriver.exe"
+        driver_path = f"{destination}{os.sep}msedgedriver.exe"
         if not os.path.exists(driver_path):
             print("Downloading msedgedriver.exe")
-            os.system(
-                f"Auto-EdgeDriver-Downloader.bat {version} {os_architecture_chipset} {destination}"
-            )
+            self._edge_driver_download(version, platform, destination)
             return
         current_driver_version = self._driver_version(driver_path)
         if current_driver_version == version:
@@ -123,22 +174,17 @@ class DriverDownloader:
             return
         print(f"{current_driver_version = }, expected_driver_{version = }")
         print("Downloading matching msedgedriver.exe")
-        os.system(
-            f"Auto-EdgeDriver-Downloader.bat {version} {os_architecture_chipset} {destination}"
-        )
+        self._edge_driver_download(version, platform, destination)
 
-    def gecko_update(self, version: str, destination: str):
-        os_architecture_chipset = self._get_os_architecture_chipset(
+    def gecko_update(self, version: str, destination: "os.PathLike"):
+        platform = self._get_os_architecture_chipset(
             self.OS[1], self.ARCHITECTURE[2], self.CHIPSET[0]
         )
-        driver_path = f"{THIS_FILE_DIRECTORY}\\geckodriver.exe"
+        driver_path = f"{destination}{os.sep}geckodriver.exe"
         gecko_version = self._get_latest_gecko_driver_version()
         if not os.path.exists(driver_path):
             print("Downloading geckodriver.exe")
-            os.system(
-                "Auto-GeckoDriver-Downloader.bat"
-                f"{version}:{gecko_version} {os_architecture_chipset} {destination}"
-            )
+            self._gecko_driver_download(gecko_version, platform, destination)
             return
         current_gecko_version = self._driver_version(driver_path)
         if self._driver_version(driver_path) == gecko_version:
@@ -148,12 +194,9 @@ class DriverDownloader:
             return
         print(f"{current_gecko_version = }, expected_{gecko_version = }")
         print("Downloading latest geckodriver.exe")
-        os.system(
-            "Auto-GeckoDriver-Downloader.bat"
-            f"{version}:{gecko_version} {os_architecture_chipset} {destination}"
-        )
+        self._gecko_driver_download(gecko_version, platform, destination)
 
-    def firefox_update(self, version: str, destination: str):
+    def firefox_update(self, version: str, destination: "os.PathLike"):
         self.gecko_update(version, destination)
 
 

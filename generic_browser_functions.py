@@ -73,7 +73,7 @@ class Browsers:
         stdout = run(
             str_form_cmd, check=True, capture_output=True, shell=True, text=True
         ).stdout.strip()
-        return re.search(regex_version_capture, stdout).group(0)
+        return res.group(0) if (res := re.search(regex_version_capture, stdout)) else None
 
 
 if __name__ == "__main__":

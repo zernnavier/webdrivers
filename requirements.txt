@@ -1,4 +1,5 @@
 schema
 pyyaml
-zipfile
+types-PyYAML
+mypy
 selenium
