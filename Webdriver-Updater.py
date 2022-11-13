@@ -9,7 +9,7 @@ from urllib import request
 from zipfile import ZipFile
 from typing import Protocol
 
-from generic_browser_functions import Browser, Browsers
+from generic_browser_functions import Browser, Browsers, REGEX_VERSION_CAPTURE
 
 
 class Arguments(Protocol):
@@ -57,7 +57,6 @@ class DriverDownloader:
     ARCHITECTURE = ["arm64", "32", "64"]
     CHIPSET = ["", "m1"]
     CODING_FORMAT = "utf-8"
-    REGEX_VERSION_CAPTURE = r"\d+\.\d+\.\d+\.*\d*"
     CHROME_VERSION_URL = (
         r"https://chromedriver.storage.googleapis.com/LATEST_RELEASE_major.minor.state"
     )
@@ -112,7 +111,7 @@ class DriverDownloader:
     def _get_latest_gecko_driver_version(cls):
         with request.urlopen(cls.GECKO_VERSION_URL) as response:
             redirected_url = response.geturl()
-        return re.search(cls.REGEX_VERSION_CAPTURE, redirected_url).group(0)
+        return re.search(REGEX_VERSION_CAPTURE, redirected_url).group(0)
 
     @classmethod
     def _driver_version(cls, driver_path: "os.PathLike") -> str:
@@ -120,7 +119,7 @@ class DriverDownloader:
         stdout = run(
             cmd, check=True, capture_output=True, shell=True, text=True
         ).stdout.strip()
-        return re.search(cls.REGEX_VERSION_CAPTURE, stdout).group(0)
+        return re.search(REGEX_VERSION_CAPTURE, stdout).group(0)
 
     @staticmethod
     def _download_and_extract_zip(url: str, destination: "os.PathLike"):

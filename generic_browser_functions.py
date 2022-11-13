@@ -1,11 +1,14 @@
 import os
 import re
+from winreg import OpenKey, HKEY_CURRENT_USER, KEY_READ, QueryValueEx
 from typing import List, Optional, NamedTuple
-from subprocess import run
 
 import yaml
 
 from schema import Schema, Regex
+
+
+REGEX_VERSION_CAPTURE = r"\d+\.\d+\.\d+\.*\d*"
 
 
 class Browser(NamedTuple):
@@ -54,26 +57,20 @@ class Browsers:
             corporation.strip().title(),
             application.strip().title(),
         )
-        application_version_key, version = (
+        application_version_key, version_key = (
             (f"{application}\\BLBeacon", "version")
             if corporation != "Mozilla"
             else (" ".join((corporation, application)), "CurrentVersion")
         )
-        windows_cmds = {
-            1: [
-                "REG",
-                "QUERY",
-                f'"HKEY_CURRENT_USER\\SOFTWARE\\{corporation}\\{application_version_key}"',
-            ],
-            2: ["FINDSTR", f'"{version}"'],
-        }
-        regex_version_capture = r"\d\d*\.\d\d*\.\d\d*\.*\d*"
-        str_form_cmds = [" ".join(j) for i, j in windows_cmds.items()]
-        str_form_cmd = " | ".join(str_form_cmds)
-        stdout = run(
-            str_form_cmd, check=True, capture_output=True, shell=True, text=True
-        ).stdout.strip()
-        return res.group(0) if (res := re.search(regex_version_capture, stdout)) else None
+        with OpenKey(
+            key=HKEY_CURRENT_USER,
+            sub_key=f"SOFTWARE\\{corporation}\\{application_version_key}",
+            access=KEY_READ,
+        ) as key:
+            version, _ = QueryValueEx(key, version_key)
+        return (
+            res.group(0) if (res := re.search(REGEX_VERSION_CAPTURE, version)) else None
+        )
 
 
 if __name__ == "__main__":
