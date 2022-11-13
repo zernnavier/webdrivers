@@ -1,18 +1,41 @@
 import re
 import os
 import shutil
+import argparse
+import textwrap
 from io import BytesIO
 from subprocess import run
 from urllib import request
 from zipfile import ZipFile
+from typing import Protocol
 
 from generic_browser_functions import Browser, Browsers
 
 
-THIS_FILE_DIRECTORY = os.path.dirname(__file__)
+class Arguments(Protocol):
+    destination: str
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        prog="Webdriver-Updater",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent(
+"""Automatically downloads the webdrivers required for browser automation
+    1. Required browser drivers are specified by creating a config.yaml file
+    2. It takes in a postional argument where the drivers are to be when downloading"""
+        ),
+    )
+    parser.add_argument(
+        "destination",
+        help="Destination path to store the webdrivers drivers",
+        type=str,
+        nargs="?",
+        default=os.getcwd(),
+    )
+    args: Arguments = parser.parse_args()
+    destination = args.destination
+    print(f"Targeted {destination = }")
     downloader = DriverDownloader()
     browser_corps = {"chrome": "google", "edge": "microsoft", "firefox": "mozilla"}
     browsers = Browsers.get_browsers("config.yaml")
@@ -20,7 +43,7 @@ def main():
         browser_obj = Browser(browser_corps[browser], browser)
         version = Browsers.get_version(browser_obj.corporation, browser_obj.application)
         if version is not None:
-            getattr(downloader, f"{browser}_update")(version, THIS_FILE_DIRECTORY)
+            getattr(downloader, f"{browser}_update")(version, destination)
         else:
             print(
                 "Unable to Obtain "

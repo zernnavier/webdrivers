@@ -1,5 +1,6 @@
 schema
 pyyaml
-types-PyYAML
+argparse
 mypy
+types-PyYAML
 selenium
