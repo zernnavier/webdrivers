@@ -34,7 +34,7 @@ class DriverDownloader:
     ARCHITECTURE = ["arm64", "32", "64"]
     CHIPSET = ["", "m1"]
     CODING_FORMAT = "utf-8"
-    REGEX_VERSION_CAPTURE = r"\d\d*\.\d\d*\.\d\d*\.*\d*"
+    REGEX_VERSION_CAPTURE = r"\d+\.\d+\.\d+\.*\d*"
     CHROME_VERSION_URL = (
         r"https://chromedriver.storage.googleapis.com/LATEST_RELEASE_major.minor.state"
     )
@@ -93,17 +93,9 @@ class DriverDownloader:
 
     @classmethod
     def _driver_version(cls, driver_path: "os.PathLike") -> str:
-        window_cmd = {
-            1: [driver_path, "--version"],
-            2: [
-                "FINDSTR",
-                "/R",
-                r'"[0-9][0-9]*[^0-9][0-9][0-9]*[^0-9][0-9][0-9]*[^0-9]*[0-9]*"',
-            ],
-        }
-        str_form_cmd = " | ".join([" ".join(cmd) for cmd in window_cmd.values()])
+        cmd = f'"{driver_path}" --version'
         stdout = run(
-            str_form_cmd, check=True, capture_output=True, shell=True, text=True
+            cmd, check=True, capture_output=True, shell=True, text=True
         ).stdout.strip()
         return re.search(cls.REGEX_VERSION_CAPTURE, stdout).group(0)
 
@@ -112,7 +104,7 @@ class DriverDownloader:
         with request.urlopen(url) as response:
             with ZipFile(BytesIO(response.read())) as zipfile:
                 zipfile.extractall(path=destination)
-        driver_notes = f'{destination}{os.sep}Driver_Notes{os.sep}'
+        driver_notes = f"{destination}{os.sep}Driver_Notes{os.sep}"
         if os.path.exists(driver_notes):
             shutil.rmtree(driver_notes)
 
